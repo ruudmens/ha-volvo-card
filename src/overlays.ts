@@ -25,6 +25,12 @@ export const MODEL_OVERLAYS: Record<string, VolvoCardOverlay> = {
     pulse_left: "60%",
     pulse_top: "59%",
   },
+  xc90: {
+    cable_bottom: "44px",
+    cable_width: "58%",
+    pulse_left: "58%",
+    pulse_top: "55%",
+  },
 };
 
 export function resolveOverlay(
