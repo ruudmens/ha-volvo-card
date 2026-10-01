@@ -148,6 +148,33 @@ labels:
   lock: Vergrendel
   unlock: Ontgrendel
   climate: Klimaat
+  electric: elektrisch
+  fuel: brandstof
+  fuel_level: Brandstof
+  time_left: resterend
+```
+
+## App-style header (optional)
+
+By default the header is range-first, and while a hybrid is charging it swaps the electric line
+for the fuel level. Set `header: app` to get the layout of the Volvo Cars app instead: battery %
+on top, electric range and fuel range below — always, including while charging.
+
+Add `charging_time_left` to show the remaining charging time on the right of the status line
+while charging ("1 h 17 min left"). Point it at the integration's `estimated_charging_time`
+sensor (minutes); a non-numeric sensor is shown as-is.
+
+```yaml
+type: custom:volvo-car-card
+header: app
+entities:
+  ...
+  charging_time_left: sensor.volvo_xc60_estimated_charging_time
+labels:            # optional, all have English defaults
+  electric: electric
+  fuel: fuel
+  fuel_level: Fuel
+  time_left: left
 ```
 
 ## The image backend (required separately — not part of the HACS install)

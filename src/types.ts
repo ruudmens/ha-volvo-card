@@ -23,6 +23,9 @@ export interface VolvoCardEntities {
   location?: string;
   start_climatisation?: string;
   stop_climatisation?: string;
+  /** Remaining charging time, e.g. the Volvo integration's `estimated_charging_time` sensor (minutes).
+   *  Shown on the right of the status line while charging, like the Volvo app ("1 h 17 min left"). */
+  charging_time_left?: string;
 }
 
 export interface VolvoCardImages {
@@ -46,6 +49,11 @@ export interface VolvoCardLabels {
   lock?: string;
   unlock?: string;
   climate?: string;
+  /** Header sub-labels and the charging-time suffix. */
+  electric?: string;
+  fuel?: string;
+  fuel_level?: string;
+  time_left?: string;
 }
 
 export interface VolvoCardConfig {
@@ -58,6 +66,9 @@ export interface VolvoCardConfig {
   model?: string;
   /** Overrides individual overlay values — takes precedence over the `model` preset. */
   overlay?: VolvoCardOverlay;
+  /** "classic" (default): range-first header. "app": battery-first header like the Volvo Cars app —
+   *  a hybrid always shows battery %, electric range and fuel range, also while charging. */
+  header?: "classic" | "app";
 }
 
 export type ChargeState = "idle" | "scheduled" | "charging";
