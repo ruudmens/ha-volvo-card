@@ -11,6 +11,7 @@ export const DEFAULT_LABELS: Required<VolvoCardLabels> = {
   electric: "electric",
   fuel: "fuel",
   fuel_level: "Fuel",
+  time_left: "left",
 };
 
 export function label(labels: VolvoCardLabels | undefined, key: keyof VolvoCardLabels): string {

@@ -81,7 +81,7 @@ export class VolvoCarCard extends LitElement {
     if (kind === "ice") {
       return { value: round(dteTank), unit: distanceUnit(this.hass, e.distance_to_empty_tank) };
     }
-    if (chargeState === "scheduled") {
+    if (chargeState === "scheduled" || this.appHeader) {
       return { value: round(battery), unit: "%" };
     }
     // idle or charging: total range (battery-only vehicles simply have dteTank = 0)
@@ -105,22 +105,47 @@ export class VolvoCarCard extends LitElement {
     if (kind === "ice") return fuelSub();
 
     if (kind === "hybrid") {
-      if (chargeState === "charging") return fuelSub();
+      if (chargeState === "charging" && !this.appHeader) return fuelSub();
       return { icon: "lightning", value: `${round(dteBattery)} ${batteryUnit}`, label: label(labels, "electric") };
     }
 
     // bev
-    if (chargeState === "scheduled") {
+    if (chargeState === "scheduled" || this.appHeader) {
       return { icon: "lightning", value: `${round(dteBattery)} ${batteryUnit}`, label: label(labels, "electric") };
     }
     return null;
   }
 
   private headerSub2(kind: VehicleKind, chargeState: ChargeState): string | null {
-    if (kind !== "hybrid" || chargeState === "charging") return null;
+    if (kind !== "hybrid" || (chargeState === "charging" && !this.appHeader)) return null;
     const tankEntity = this.config.entities.distance_to_empty_tank;
     const dteTank = numState(this.hass, tankEntity) ?? 0;
     return `${round(dteTank)} ${distanceUnit(this.hass, tankEntity)} ${label(this.config.labels, "fuel")}`;
+  }
+
+  private get appHeader(): boolean {
+    return this.config.header === "app";
+  }
+
+  /** "1 h 17 min left" from a minutes sensor; a non-numeric state is shown as-is. */
+  private chargingTimeLeft(): string | null {
+    const id = this.config.entities.charging_time_left;
+    if (!id) return null;
+    const raw = getState(this.hass, id);
+    if (raw === undefined || raw === "" || raw === "unknown" || raw === "unavailable") return null;
+    const n = Number(raw);
+    let text: string;
+    if (Number.isFinite(n)) {
+      const unit = this.hass.states[id]?.attributes?.unit_of_measurement;
+      const minutes = Math.round(unit === "h" ? n * 60 : unit === "s" ? n / 60 : n);
+      if (minutes <= 0) return null;
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      text = h > 0 ? `${h} h ${m} min` : `${m} min`;
+    } else {
+      text = raw;
+    }
+    return `${text} ${label(this.config.labels, "time_left")}`.trim();
   }
 
   private carImageStyle(connected: boolean): { style: Record<string, string>; hasImage: boolean } {
@@ -173,6 +198,7 @@ export class VolvoCarCard extends LitElement {
     const sub2 = this.headerSub2(kind, chargeState);
     const sKey = statusKey(this.hass, e, chargeState, kind);
     const status = sKey ? label(this.config.labels, sKey) : "";
+    const timeLeft = chargeState === "charging" ? this.chargingTimeLeft() : null;
     const { style: imgStyle, hasImage } = this.carImageStyle(connected);
     const isDark = this.hass.themes?.darkMode ?? true;
     // Text over the car photo stays white regardless of theme (the photo's own
@@ -213,6 +239,7 @@ export class VolvoCarCard extends LitElement {
             ${sub2 ? html`<div class="row sub-row-2">${sub2}</div>` : nothing}
           </div>
           ${status ? html`<div class="status ${overlayClass}">${status}</div>` : nothing}
+          ${timeLeft ? html`<div class="status-right ${overlayClass}">${timeLeft}</div>` : nothing}
           ${this.actionsOpen ? this.renderActionsDialog(e, isDark) : nothing}
         </div>
       </ha-card>
@@ -483,6 +510,16 @@ export class VolvoCarCard extends LitElement {
       margin-left: 3px;
     }
 
+    .status-right {
+      position: absolute;
+      right: 16px;
+      bottom: 19px;
+      z-index: 3;
+      font-size: 15px;
+      font-weight: 300;
+      color: #aaa;
+    }
+
     .status {
       position: absolute;
       left: 13px;
@@ -512,7 +549,8 @@ export class VolvoCarCard extends LitElement {
     .header.theme-text .sub-row-2 {
       color: #5c5c5c;
     }
-    .status.theme-text {
+    .status.theme-text,
+    .status-right.theme-text {
       color: #5c5c5c;
     }
 
