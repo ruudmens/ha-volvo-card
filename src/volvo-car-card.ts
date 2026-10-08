@@ -1,26 +1,20 @@
-import { LitElement, html, css, unsafeCSS, nothing, TemplateResult } from "lit";
+import { LitElement, html, svg, css, unsafeCSS, nothing, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { HomeAssistant, VolvoCardConfig, VolvoCardEntities, VehicleKind, ChargeState } from "./types";
 import {
   getState,
   numState,
   resolveImage,
   round,
+  distanceUnit,
   deriveVehicleKind,
   deriveChargeState,
   isConnected,
   isCharging,
   statusKey,
 } from "./state";
-import {
-  HEDVIG_FONT_WOFF2,
-  LIGHTNING_ICON_PATH,
-  LOCK_ICON_INNER,
-  LOCK_OPEN_ICON_INNER,
-  FAN_ICON_INNER,
-  CABLE_IMAGE_PNG,
-} from "./assets";
+import { HEDVIG_FONT_WOFF2, CABLE_IMAGE_PNG } from "./assets";
+import { VolvoIcon, BOLT_ICON, LOCK_ICON, LOCK_OPEN_ICON, FAN_ICON } from "./icons";
 import { label } from "./labels";
 import { resolveOverlay } from "./overlays";
 
@@ -85,13 +79,13 @@ export class VolvoCarCard extends LitElement {
     const battery = numState(this.hass, e.battery) ?? 0;
 
     if (kind === "ice") {
-      return { value: round(dteTank), unit: "km" };
+      return { value: round(dteTank), unit: distanceUnit(this.hass, e.distance_to_empty_tank) };
     }
     if (chargeState === "scheduled") {
       return { value: round(battery), unit: "%" };
     }
     // idle or charging: total range (battery-only vehicles simply have dteTank = 0)
-    return { value: round(dteBattery + dteTank), unit: "km" };
+    return { value: round(dteBattery + dteTank), unit: distanceUnit(this.hass, e.distance_to_empty_battery) };
   }
 
   private headerSub1(kind: VehicleKind, chargeState: ChargeState): HeaderSub | null {
@@ -99,31 +93,34 @@ export class VolvoCarCard extends LitElement {
     const dteBattery = numState(this.hass, e.distance_to_empty_battery) ?? 0;
     const fuelAmount = numState(this.hass, e.fuel_amount);
     const tankCapacity = e.fuel_tank_capacity_l;
+    const labels = this.config.labels;
+    const batteryUnit = distanceUnit(this.hass, e.distance_to_empty_battery);
 
     const fuelSub = (): HeaderSub | null => {
       if (fuelAmount === undefined || !tankCapacity) return null;
       const pct = round((fuelAmount / tankCapacity) * 100);
-      return { icon: "mdi:gas-station", value: `${pct}%`, label: "Fuel" };
+      return { icon: "mdi:gas-station", value: `${pct}%`, label: label(labels, "fuel_level") };
     };
 
     if (kind === "ice") return fuelSub();
 
     if (kind === "hybrid") {
       if (chargeState === "charging") return fuelSub();
-      return { icon: "lightning", value: `${round(dteBattery)} km`, label: "electric" };
+      return { icon: "lightning", value: `${round(dteBattery)} ${batteryUnit}`, label: label(labels, "electric") };
     }
 
     // bev
     if (chargeState === "scheduled") {
-      return { icon: "lightning", value: `${round(dteBattery)} km`, label: "electric" };
+      return { icon: "lightning", value: `${round(dteBattery)} ${batteryUnit}`, label: label(labels, "electric") };
     }
     return null;
   }
 
   private headerSub2(kind: VehicleKind, chargeState: ChargeState): string | null {
     if (kind !== "hybrid" || chargeState === "charging") return null;
-    const dteTank = numState(this.hass, this.config.entities.distance_to_empty_tank) ?? 0;
-    return `${round(dteTank)} km fuel`;
+    const tankEntity = this.config.entities.distance_to_empty_tank;
+    const dteTank = numState(this.hass, tankEntity) ?? 0;
+    return `${round(dteTank)} ${distanceUnit(this.hass, tankEntity)} ${label(this.config.labels, "fuel")}`;
   }
 
   private carImageStyle(connected: boolean): { style: Record<string, string>; hasImage: boolean } {
@@ -185,7 +182,10 @@ export class VolvoCarCard extends LitElement {
 
     return html`
       <ha-card>
-        <div class="volvo-card" @click=${this.openActions}>
+        <div
+          class="volvo-card ${this.config.show_actions === false ? "" : "clickable"}"
+          @click=${this.openActions}
+        >
           ${charging ? this.renderPulse() : nothing}
           <div
             class="car-image"
@@ -213,13 +213,14 @@ export class VolvoCarCard extends LitElement {
             ${sub2 ? html`<div class="row sub-row-2">${sub2}</div>` : nothing}
           </div>
           ${status ? html`<div class="status ${overlayClass}">${status}</div>` : nothing}
+          ${this.actionsOpen ? this.renderActionsDialog(e, isDark) : nothing}
         </div>
       </ha-card>
-      ${this.actionsOpen ? this.renderActionsDialog(e, isDark) : nothing}
     `;
   }
 
   private openActions(ev: Event): void {
+    if (this.config.show_actions === false) return;
     ev.stopPropagation();
     this.actionsOpen = true;
   }
@@ -252,7 +253,13 @@ export class VolvoCarCard extends LitElement {
     const themeClass = isDark ? "dark" : "light";
 
     return html`
-      <div class="actions-backdrop" @click=${this.closeActions}>
+      <div
+        class="actions-backdrop"
+        @click=${(ev: Event) => {
+          ev.stopPropagation();
+          this.closeActions();
+        }}
+      >
         <div class="actions-panel" @click=${(ev: Event) => ev.stopPropagation()}>
           ${e.lock
             ? html`
@@ -261,7 +268,7 @@ export class VolvoCarCard extends LitElement {
                   aria-label=${isLocked ? label(this.config.labels, "unlock") : label(this.config.labels, "lock")}
                   @click=${() => this.callLock(!isLocked)}
                 >
-                  ${this.renderStrokeIcon(isLocked ? LOCK_ICON_INNER : LOCK_OPEN_ICON_INNER)}
+                  ${this.renderIcon(isLocked ? LOCK_ICON : LOCK_OPEN_ICON, "icon-svg-button")}
                   <span>${isLocked ? label(this.config.labels, "unlock") : label(this.config.labels, "lock")}</span>
                 </button>
               `
@@ -273,7 +280,7 @@ export class VolvoCarCard extends LitElement {
                   aria-label=${label(this.config.labels, "climate")}
                   @click=${() => this.toggleClimate()}
                 >
-                  ${this.renderStrokeIcon(FAN_ICON_INNER)}
+                  ${this.renderIcon(FAN_ICON, "icon-svg-button", this.climateOn)}
                   <span>${label(this.config.labels, "climate")}</span>
                 </button>
               `
@@ -284,22 +291,14 @@ export class VolvoCarCard extends LitElement {
   }
 
   private renderLightningIcon(): TemplateResult {
-    return html`<svg class="icon-svg" viewBox="0 0 24 24">
-      <path fill="currentColor" d=${LIGHTNING_ICON_PATH}></path>
-    </svg>`;
+    return this.renderIcon(BOLT_ICON, "icon-svg", true);
   }
 
-  private renderStrokeIcon(inner: string): TemplateResult {
-    return html`<svg
-      class="icon-svg-stroke"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      ${unsafeSVG(inner)}
+  private renderIcon(icon: VolvoIcon, className: string, filled = false): TemplateResult {
+    return html`<svg class=${className} viewBox="0 0 24 24" fill="currentColor">
+      ${(filled ? icon.filled : icon.outline).map(
+        (d) => svg`<path fill-rule="evenodd" clip-rule="evenodd" d=${d}></path>`
+      )}
     </svg>`;
   }
 
@@ -517,14 +516,14 @@ export class VolvoCarCard extends LitElement {
       color: #5c5c5c;
     }
 
-    .volvo-card {
+    .volvo-card.clickable {
       cursor: pointer;
     }
 
     .actions-backdrop {
-      position: fixed;
+      position: absolute;
       inset: 0;
-      z-index: 1000;
+      z-index: 10;
       background: rgba(0, 0, 0, 0.5);
       display: flex;
       align-items: center;
@@ -553,34 +552,34 @@ export class VolvoCarCard extends LitElement {
       cursor: pointer;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
-    .icon-button .icon-svg-stroke {
+    .icon-button .icon-svg-button {
       width: 28px;
       height: 28px;
     }
     .icon-button.light {
       color: #141414;
     }
-    .icon-button.light .icon-svg-stroke {
+    .icon-button.light .icon-svg-button {
       color: #141414;
     }
     .icon-button.dark {
       color: white;
     }
-    .icon-button.dark .icon-svg-stroke {
+    .icon-button.dark .icon-svg-button {
       color: white;
     }
     .icon-button.light.active {
       background: #141414;
       color: white;
     }
-    .icon-button.light.active .icon-svg-stroke {
+    .icon-button.light.active .icon-svg-button {
       color: white;
     }
     .icon-button.dark.active {
       background: white;
       color: #0d0f10;
     }
-    .icon-button.dark.active .icon-svg-stroke {
+    .icon-button.dark.active .icon-svg-button {
       color: #0d0f10;
     }
   `;

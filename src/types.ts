@@ -5,6 +5,9 @@ export interface HomeAssistant {
       attributes: Record<string, any>;
     };
   };
+  config?: {
+    unit_system?: { length?: string };
+  };
   themes?: {
     darkMode: boolean;
   };
@@ -46,6 +49,9 @@ export interface VolvoCardLabels {
   lock?: string;
   unlock?: string;
   climate?: string;
+  electric?: string;
+  fuel?: string;
+  fuel_level?: string;
 }
 
 export interface VolvoCardConfig {
@@ -54,6 +60,8 @@ export interface VolvoCardConfig {
   entities: VolvoCardEntities;
   images?: VolvoCardImages;
   labels?: VolvoCardLabels;
+  /** Show the lock/climate dialog when the card is tapped. Defaults to true. */
+  show_actions?: boolean;
   /** Selects a built-in cable/pulse overlay preset tuned for this model, e.g. "v60". See overlays.ts. */
   model?: string;
   /** Overrides individual overlay values — takes precedence over the `model` preset. */

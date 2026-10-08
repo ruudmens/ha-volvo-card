@@ -29,6 +29,16 @@ export function numState(hass: HomeAssistant, entityId?: string): number | undef
   return Number.isNaN(n) ? undefined : n;
 }
 
+/**
+ * Distance unit for a range sensor: the entity's own unit (HA converts it to the user's
+ * unit system), else the HA unit system, else km.
+ */
+export function distanceUnit(hass: HomeAssistant, entityId?: string): string {
+  const fromEntity = getAttr(hass, entityId, "unit_of_measurement");
+  if (fromEntity) return fromEntity;
+  return hass.config?.unit_system?.length === "mi" ? "mi" : "km";
+}
+
 export function round(n: number | undefined): number {
   return Math.round(n ?? 0);
 }
@@ -45,6 +55,11 @@ export function deriveVehicleKind(entities: VolvoCardEntities): VehicleKind {
   if (hasBattery) return "bev";
   if (hasFuel) return "ice";
   return "unknown";
+}
+
+function isHome(hass: HomeAssistant, entities: VolvoCardEntities): boolean {
+  if (!entities.location) return true;
+  return getState(hass, entities.location) === "home";
 }
 
 export function isConnected(hass: HomeAssistant, entities: VolvoCardEntities): boolean {
@@ -81,18 +96,16 @@ export function statusKey(
   kind: VehicleKind
 ): StatusKey {
   if (kind === "ice") {
-    const isHome = getState(hass, entities.location) === "home";
     const isLocked = getState(hass, entities.lock) === "locked";
-    if (isHome && !isLocked) return "unlocked";
-    return "";
+    if (entities.lock && isHome(hass, entities) && !isLocked) return "unlocked";
+    return isLocked ? "locked" : "";
   }
 
-  const isHome = getState(hass, entities.location) === "home";
   const isLocked = getState(hass, entities.lock) === "locked";
   const battery = numState(hass, entities.battery) ?? 0;
   const isFullyCharged = battery >= 100;
 
-  if (isHome && !isLocked) return "unlocked";
+  if (entities.lock && isHome(hass, entities) && !isLocked) return "unlocked";
   if (chargeState === "scheduled") {
     return isFullyCharged && isLocked ? "locked" : "scheduled";
   }

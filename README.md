@@ -94,6 +94,13 @@ toggle (shown when either `start_climatisation` or `stop_climatisation` is set �
 integration exposes these as momentary `button.*` entities, not a single on/off switch, so the card
 tracks the on/off state itself and presses whichever button matches).
 
+The dialog opens centered over the card. To disable it (e.g. if you add your own buttons), set
+`show_actions: false` at the top level of the card config.
+
+Range units follow the unit of your distance sensors, so switching Home Assistant to miles shows
+`mi`. The status text (`Unlocked`/`Locked`) needs the `lock` entity; `location` is optional — when
+set, "Unlocked" only shows while the car is at `home`.
+
 ## Cable & pulse overlay (per-model tuning)
 
 The charge cable image and the charging-pulse glow are both positioned as an overlay on top of the
@@ -148,6 +155,9 @@ labels:
   lock: Vergrendel
   unlock: Ontgrendel
   climate: Klimaat
+  electric: elektrisch     # sub-stat label next to the electric range
+  fuel: brandstof          # suffix on the fuel range ("120 km fuel")
+  fuel_level: Brandstof    # label next to the fuel percentage
 ```
 
 ## The image backend (required separately — not part of the HACS install)
